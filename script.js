@@ -2,7 +2,8 @@
 let habits = JSON.parse(localStorage.getItem('habits')) || [];
 let history = JSON.parse(localStorage.getItem('history')) || {};
 let currentTheme = localStorage.getItem('theme') || 'light';
-let profile = JSON.parse(localStorage.getItem('profile')) || { name: '', email: '', bio: '', target: 5, showAiTips: true };
+let profile = JSON.parse(localStorage.getItem('profile')) || { name: '', email: '', password: '', bio: '', target: 5, showAiTips: true };
+let isAuthenticated = sessionStorage.getItem('auth') === 'true';
 
 const habitEmojis = {
     'water': '💧', 'skin': '🧴', 'face': '✨', 'read': '📖', 'book': '📚', 'run': '🏃‍♂️', 'gym': '🏋️‍♂️', 
@@ -88,8 +89,10 @@ const historyGrid = document.getElementById('historyGrid');
 // Profile Elements
 const profileForm = document.getElementById('profileForm');
 const profileNameInput = document.getElementById('profileName');
+const profileEmailInput = document.getElementById('profileEmail');
 const profileBioInput = document.getElementById('profileBio');
 const profileTargetInput = document.getElementById('profileTarget');
+const profilePicPreview = document.getElementById('profilePicPreview');
 
 // Initialize Icons
 lucide.createIcons();
@@ -111,14 +114,39 @@ applyTheme(currentTheme);
 const init = () => {
     // Auth Check
     const authOverlay = document.getElementById('authOverlay');
-    if (!profile.email) {
+    if (!isAuthenticated) {
         authOverlay.classList.remove('hidden');
+        if (profile.password) {
+            document.getElementById('authName').parentElement.style.display = 'none';
+            document.getElementById('authEmail').parentElement.style.display = 'none';
+            document.getElementById('authName').removeAttribute('required');
+            document.getElementById('authEmail').removeAttribute('required');
+            document.querySelector('#authOverlay h2').textContent = `Welcome back, ${profile.name.split(' ')[0]}!`;
+            document.querySelector('#authOverlay p').textContent = "Enter your 4-digit PIN to unlock.";
+        } else if (profile.email && !profile.password) {
+            document.querySelector('#authOverlay h2').textContent = `Create a PIN`;
+            document.querySelector('#authOverlay p').textContent = "Please secure your profile with 4 numbers.";
+        }
+        return;
     } else {
         authOverlay.classList.add('hidden');
+    }
+    
+    // Admin Check
+    const adminNavBtn = document.getElementById('adminNavBtn');
+    if (adminNavBtn) {
+        const checkEmail = (profile.email || '').toLowerCase();
+        adminNavBtn.style.display = (checkEmail === 'admin@daytick.com') ? 'flex' : 'none';
     }
 
     const options = { weekday: 'long', month: 'long', day: 'numeric' };
     currentDateDisplay.textContent = new Date().toLocaleDateString('en-US', options);
+    
+    // Auto-seed mock feedback for Community view if empty
+    let existingReviews = JSON.parse(localStorage.getItem('reviews'));
+    if (!existingReviews || existingReviews.length === 0) {
+        localStorage.setItem('reviews', JSON.stringify(mockFeedbacks));
+    }
     
     // Ensure today's history exists
     const today = getTodayDateString();
@@ -129,6 +157,7 @@ const init = () => {
     
     // Load profile to inputs
     if(profileNameInput) profileNameInput.value = profile.name;
+    if(profileEmailInput) profileEmailInput.value = profile.email || '';
     if(profileBioInput) profileBioInput.value = profile.bio;
     if(profileTargetInput) profileTargetInput.value = profile.target || 5;
     
@@ -148,8 +177,32 @@ const init = () => {
         document.getElementById('viewTitle').textContent = `Hi, ${profile.name.split(' ')[0]}!`;
     }
     
-    // Set motivational quote
-    document.getElementById('quoteDisplay').textContent = `"${quotes[Math.floor(Math.random() * quotes.length)]}"`;
+    updateProfileImages();
+    
+    // Maintain visually selected option status
+    const avatarOptionsArr = document.querySelectorAll('.avatar-option');
+    if (avatarOptionsArr.length > 0) {
+        avatarOptionsArr.forEach(img => img.classList.remove('selected'));
+        const activeSrc = profile.avatar || 'https://api.dicebear.com/7.x/notionists/svg?seed=Felix&backgroundColor=f0f0f0';
+        let found = false;
+        avatarOptionsArr.forEach(img => {
+            if (img.src === activeSrc) {
+                img.classList.add('selected');
+                found = true;
+            }
+        });
+        if (!found) avatarOptionsArr[0].classList.add('selected');
+    }
+    
+    // Set motivational quote (one per day)
+    let quoteCache = JSON.parse(localStorage.getItem('quoteCache')) || { date: '', quote: '' };
+    if (quoteCache.date !== today) {
+        quoteCache.date = today;
+        quoteCache.quote = quotes[Math.floor(Math.random() * quotes.length)];
+        localStorage.setItem('quoteCache', JSON.stringify(quoteCache));
+    }
+    const qDisplay = document.getElementById('quoteDisplay');
+    if (qDisplay) qDisplay.textContent = `"${quoteCache.quote}"`;
     
     renderHabits();
     renderProgress();
@@ -166,23 +219,56 @@ const authForm = document.getElementById('authForm');
 if (authForm) {
     authForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        profile.name = document.getElementById('authName').value.trim();
-        profile.email = document.getElementById('authEmail').value.trim();
-        saveData();
-        document.getElementById('authOverlay').classList.add('hidden');
-        init();
+        const enteredPin = document.getElementById('authPassword').value.trim();
+        const errorMsg = document.getElementById('authErrorMsg');
+
+        if (profile.password) {
+            // Returning user unlocking
+            if (enteredPin === profile.password) {
+                sessionStorage.setItem('auth', 'true');
+                isAuthenticated = true;
+                errorMsg.classList.add('hidden');
+                document.getElementById('authOverlay').classList.add('hidden');
+                init();
+            } else {
+                errorMsg.textContent = "Incorrect PIN. Please try again.";
+                errorMsg.classList.remove('hidden');
+            }
+        } else {
+            // New user registration or legacy migration
+            if (document.getElementById('authName').value) {
+                profile.name = document.getElementById('authName').value.trim();
+                profile.email = document.getElementById('authEmail').value.trim().toLowerCase();
+            }
+            profile.password = enteredPin;
+            saveData();
+            
+            sessionStorage.setItem('auth', 'true');
+            isAuthenticated = true;
+            document.getElementById('authOverlay').classList.add('hidden');
+            init();
+        }
     });
 }
 
 profileForm.addEventListener('submit', (e) => {
     e.preventDefault();
     profile.name = profileNameInput.value.trim();
+    if(profileEmailInput) profile.email = profileEmailInput.value.trim().toLowerCase();
     profile.bio = profileBioInput.value.trim();
     profile.target = parseInt(profileTargetInput.value) || 5;
     const aiToggle = document.getElementById('profileAiToggle');
     if(aiToggle) profile.showAiTips = aiToggle.checked;
     
     saveData();
+    updateProfileImages();
+    
+    // Re-trigger admin check dynamically
+    const adminNavBtn = document.getElementById('adminNavBtn');
+    if (adminNavBtn) {
+        const checkEmail = (profile.email || '').toLowerCase();
+        adminNavBtn.style.display = (checkEmail === 'admin@daytick.com') ? 'flex' : 'none';
+    }
     
     if(profile.name) {
         document.getElementById('viewTitle').textContent = `Hi, ${profile.name.split(' ')[0]}!`;
@@ -192,23 +278,40 @@ profileForm.addEventListener('submit', (e) => {
     alert('Profile successfully saved!');
 });
 
-const feedbackForm = document.getElementById('feedbackForm');
-if (feedbackForm) {
-    feedbackForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const fName = document.getElementById('feedbackName').value;
-        const rating = document.getElementById('feedbackRating').value;
-        const text = document.getElementById('feedbackText').value;
+function updateProfileImages() {
+    const defaultPic = profile.name 
+        ? `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name)}&background=6366f1&color=fff`
+        : "https://ui-avatars.com/api/?name=User&background=6366f1&color=fff";
         
-        const reviews = JSON.parse(localStorage.getItem('reviews')) || [];
-        reviews.push({ name: fName, rating, text, date: new Date().toISOString() });
-        localStorage.setItem('reviews', JSON.stringify(reviews));
+    const picSrc = profile.picture || defaultPic;
+    
+    if(profilePicPreview) profilePicPreview.src = picSrc;
+    
+    const profileNavItem = document.querySelector('.nav-item[data-view="profile"]');
+    if (profileNavItem) {
+        profileNavItem.innerHTML = `<img src="${picSrc}" style="width: 22px; height: 22px; border-radius: 50%; object-fit: cover;"> Profile`;
+    }
+}
+
+// Attach listeners to preset avatars
+const presetAvatars = document.querySelectorAll('.preset-avatar');
+presetAvatars.forEach(av => {
+    av.addEventListener('click', () => {
+        profile.picture = av.src;
+        saveData();
+        updateProfileImages();
         
-        feedbackForm.reset();
-        document.getElementById('feedbackSuccessMsg').classList.remove('hidden');
-        setTimeout(() => {
-            document.getElementById('feedbackSuccessMsg').classList.add('hidden');
-        }, 3000);
+        // Optional: flash border to indicate active
+        presetAvatars.forEach(a => a.style.borderColor = 'transparent');
+        av.style.borderColor = 'var(--primary-color)';
+    });
+});
+
+const logoutBtn = document.getElementById('logoutBtn');
+if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+        sessionStorage.removeItem('auth');
+        window.location.reload();
     });
 }
 
@@ -237,6 +340,10 @@ navItems.forEach(item => {
         } else if (viewName === 'feedback') {
             viewTitle.textContent = "Feedback & Reviews";
             addHabitBtn.style.display = 'none';
+        } else if (viewName === 'admin') {
+            viewTitle.textContent = "Admin Control Panel";
+            addHabitBtn.style.display = 'none';
+            renderAdminReviews();
         }
     });
 });
@@ -521,6 +628,86 @@ const renderProgress = () => {
         }
     }
 };
+
+const renderAdminReviews = () => {
+    const list = document.getElementById('adminReviewsList');
+    if (!list) return;
+    
+    const reviews = JSON.parse(localStorage.getItem('reviews')) || [];
+    if (reviews.length === 0) {
+        list.innerHTML = '<p style="color: var(--text-secondary);">No feedback received yet.</p>';
+        return;
+    }
+    
+    list.innerHTML = reviews.reverse().map(r => `
+        <div style="background: var(--surface-solid); border: 1px solid var(--border-color); padding: 16px; border-radius: 12px; animation: fadeInModal 0.2s ease;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                <div>
+                    <strong style="color: var(--primary-color);">${escapeHTML(r.name || 'Anonymous User')}</strong>
+                    ${r.isHidden ? '<span style="background: #ef444420; color: #ef4444; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-left: 8px;">HIDDEN</span>' : ''}
+                </div>
+                <span style="color: #f59e0b; font-size: 16px;">${'★'.repeat(Math.min(5, parseInt(r.rating) || 5))}</span>
+            </div>
+            <p style="color: var(--text-primary); font-size: 15px; margin-bottom: 12px; line-height: 1.5;">"${escapeHTML(r.text)}"</p>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 12px; color: var(--text-secondary); opacity: 0.8;"><i data-lucide="clock" style="width: 12px; height: 12px; display: inline; margin-bottom: -2px;"></i> ${new Date(r.date).toLocaleString()}</div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="secondary-btn" onclick="toggleHideReview('${r.id}')" style="padding: 4px 10px; font-size: 12px;">
+                        <i data-lucide="${r.isHidden ? 'eye' : 'eye-off'}" style="width: 14px; height: 14px;"></i> ${r.isHidden ? 'Restore' : 'Hide'}
+                    </button>
+                    <button class="secondary-btn" onclick="deleteReview('${r.id}')" style="padding: 4px 10px; font-size: 12px; color: #ef4444; border-color: #ef444440;">
+                        <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i> Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    lucide.createIcons();
+};
+
+window.toggleHideReview = (id) => {
+    let reviews = JSON.parse(localStorage.getItem('reviews')) || [];
+    const index = reviews.findIndex(r => r.id === id);
+    if(index > -1) {
+        reviews[index].isHidden = !reviews[index].isHidden;
+        localStorage.setItem('reviews', JSON.stringify(reviews));
+        renderAdminReviews();
+        if (typeof renderCommunityFeedback === 'function') renderCommunityFeedback();
+    }
+};
+
+window.deleteReview = (id) => {
+    if(!confirm('Delete this review permanently from the system?')) return;
+    let reviews = JSON.parse(localStorage.getItem('reviews')) || [];
+    reviews = reviews.filter(r => r.id !== id);
+    localStorage.setItem('reviews', JSON.stringify(reviews));
+    renderAdminReviews();
+    if (typeof renderCommunityFeedback === 'function') renderCommunityFeedback();
+};
+
+const mockFeedbacks = [
+    { id: 'mock_1', name: "Sarah Connor", rating: 5, text: "Absolutely love the new minimalistic aesthetic! The confetti when finishing a habit is a huge motivator.", date: new Date(Date.now() - 86400000 * 2).toISOString(), isHidden: false },
+    { id: 'mock_2', name: "David Chen", rating: 4, text: "The AI suggestions are a nice touch. I wish we could sync this across devices though.", date: new Date(Date.now() - 86400000 * 1.5).toISOString(), isHidden: false },
+    { id: 'mock_3', name: "Emma Watson", rating: 5, text: "Simple, fast, and does exactly what it needs to without the bloat.", date: new Date(Date.now() - 3600000 * 5).toISOString(), isHidden: false },
+    { id: 'mock_4', name: "Jessica L.", rating: 3, text: "It's good but I accidentally cleared my browser cache and lost everything.", date: new Date(Date.now() - 3600000 * 2).toISOString(), isHidden: false }
+];
+
+const mockBtn = document.getElementById('generateMockReviews');
+if (mockBtn) {
+    mockBtn.addEventListener('click', () => {
+        let currentReviews = JSON.parse(localStorage.getItem('reviews')) || [];
+        const newFeedbacks = mockFeedbacks.filter(m => !currentReviews.some(cr => cr.name === m.name));
+        
+        if (newFeedbacks.length > 0) {
+            currentReviews = [...currentReviews, ...newFeedbacks];
+            localStorage.setItem('reviews', JSON.stringify(currentReviews));
+            renderAdminReviews();
+            alert("Simulated user feedbacks successfully loaded!");
+        } else {
+            alert("Simulated feedbacks are already in the feed.");
+        }
+    });
+}
 
 const renderHistory = () => {
     historyGrid.innerHTML = '';
