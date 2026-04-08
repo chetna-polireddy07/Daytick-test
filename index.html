@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daytick - Student Habit Tracker</title>
+    <meta name="description" content="A clean, modern habit tracker tailored for students.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+    <!-- Auth Overlay -->
+    <div id="authOverlay" class="modal-overlay hidden">
+        <div class="modal-content glass" style="text-align: center;">
+            <div class="logo" style="justify-content: center; margin-bottom: 24px;">
+                <i data-lucide="activity"></i>
+                <span style="font-size: 24px; font-weight: bold;">Daytick</span>
+            </div>
+            <h2>Welcome! Log in or Sign up</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 24px;">Enter your details to open your profile.</p>
+            <form id="authForm">
+                <div class="form-group" style="text-align: left;">
+                    <label for="authName">Full Name</label>
+                    <input type="text" id="authName" placeholder="e.g. John Doe" required autocomplete="off">
+                </div>
+                <div class="form-group" style="text-align: left;">
+                    <label for="authEmail">Email Address</label>
+                    <input type="email" id="authEmail" placeholder="e.g. john@example.com" required autocomplete="off">
+                </div>
+                <button type="submit" class="primary-btn submit-btn" style="width: 100%; justify-content: center;">Continue Tracking</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <!-- Sidebar / Navigation -->
+        <aside class="sidebar">
+            <div class="logo">
+                <i data-lucide="activity"></i>
+                <span>Daytick</span>
+            </div>
+            <nav class="nav-links">
+                <button class="nav-item active" data-view="dashboard">
+                    <i data-lucide="layout-dashboard"></i> Dashboard
+                </button>
+                <button class="nav-item" data-view="history">
+                    <i data-lucide="calendar"></i> History
+                </button>
+                <button class="nav-item" data-view="profile">
+                    <i data-lucide="user"></i> Profile
+                </button>
+                <button class="nav-item" data-view="feedback">
+                    <i data-lucide="message-square"></i> Feedback
+                </button>
+            </nav>
+            <div class="theme-toggle">
+                <button id="themeToggleBtn" aria-label="Toggle theme">
+                    <i data-lucide="moon" class="moon-icon"></i>
+                    <i data-lucide="sun" class="sun-icon"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="top-header">
+                <div class="header-titles">
+                    <h1 id="viewTitle">Today's Habits</h1>
+                    <p id="currentDateDisplay" class="date-subtitle"></p>
+                    <p id="quoteDisplay" class="quote-text"></p>
+                </div>
+                <button id="addHabitBtn" class="primary-btn">
+                    <i data-lucide="plus"></i> New Habit
+                </button>
+            </header>
+
+            <!-- Dashboard View -->
+            <div id="dashboardView" class="view-section active">
+                
+                <!-- Progress Widgets -->
+                <section class="progress-section">
+                    <div class="stat-card glass full-width" id="dailyReportCard" style="display: none;">
+                        <div class="stat-info">
+                            <h3><i data-lucide="zap" style="color: #f59e0b;"></i> Daily Productivity Report</h3>
+                            <p id="dailyReportText" style="font-size: 15px; font-weight: 500; color: var(--text-secondary); margin-top: 8px;">Waiting for data...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card glass">
+                        <div class="stat-info">
+                            <h3>Daily Progress</h3>
+                            <p id="dailyProgressText">0% Completed</p>
+                        </div>
+                        <div class="circular-progress">
+                            <svg viewBox="0 0 36 36" class="circular-chart">
+                                <path class="circle-bg"
+                                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                <path id="dailyProgressCircle" class="circle" stroke-dasharray="0, 100"
+                                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                            </svg>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card glass">
+                        <div class="stat-info">
+                            <h3>Weekly Consistency</h3>
+                            <p id="weeklyProgressText">Keep it up!</p>
+                        </div>
+                        <div class="bar-chart" id="weeklyChart">
+                            <!-- Bars injected via JS -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Habits List -->
+                <section class="habits-section">
+                    <div class="section-header">
+                        <h2>Your Habits</h2>
+                    </div>
+                    <div id="habitsList" class="habits-list">
+                        <!-- Habit items will be injected here -->
+                    </div>
+                    <div id="emptyHabits" class="empty-state hidden">
+                        <i data-lucide="target" class="empty-icon"></i>
+                        <p>No habits yet. Start small and dream big!</p>
+                        <button id="emptyAddBtn" class="secondary-btn">Create your first habit</button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- History View -->
+            <div id="historyView" class="view-section hidden">
+                <section class="history-section glass">
+                    <h2>Past 7 Days</h2>
+                    <div class="history-grid" id="historyGrid">
+                        <!-- History data injected here -->
+                    </div>
+                </section>
+            </div>
+
+            <!-- Profile View -->
+            <div id="profileView" class="view-section hidden">
+                <section class="profile-section glass">
+                    <h2>Your Profile</h2>
+                    <form id="profileForm" class="profile-form">
+                        <div class="form-group">
+                            <label for="profileName">Full Name</label>
+                            <input type="text" id="profileName" placeholder="e.g. John Doe">
+                        </div>
+                        <div class="form-group">
+                            <label for="profileBio">Short Bio / Motivation</label>
+                            <input type="text" id="profileBio" placeholder="e.g. Dedicated Student">
+                        </div>
+                        <div class="form-group">
+                            <label for="profileTarget">Daily Target (Habits)</label>
+                            <input type="number" id="profileTarget" min="1" max="20" placeholder="e.g. 5">
+                        </div>
+                        <div class="form-group" style="display: flex; align-items: center; justify-content: space-between;">
+                            <label for="profileAiToggle" style="margin-bottom: 0;">Show AI Suggestions</label>
+                            <input type="checkbox" id="profileAiToggle" style="width: 20px; height: 20px; accent-color: var(--primary-color);">
+                        </div>
+                        <button type="submit" class="primary-btn submit-btn">Save Profile</button>
+                    </form>
+                </section>
+            </div>
+
+            <!-- Feedback View -->
+            <div id="feedbackView" class="view-section hidden">
+                <section class="feedback-section glass">
+                    <div class="feedback-layout">
+                        <div class="feedback-content">
+                            <h2>We'd Love Your Feedback</h2>
+                            <p>Help us improve your experience with Daytick.</p>
+                            <form id="feedbackForm" class="profile-form mt-4">
+                                <div class="form-group">
+                                    <label for="feedbackName">Your Name</label>
+                                    <input type="text" id="feedbackName" placeholder="e.g. John Doe" required autocomplete="off">
+                                </div>
+                                <div class="form-group">
+                                    <label for="feedbackRating">Rate your experience (1-5)</label>
+                                    <input type="number" id="feedbackRating" min="1" max="5" placeholder="e.g. 5" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="feedbackText">Any advice to improve?</label>
+                                    <textarea id="feedbackText" rows="4" placeholder="Your thoughts..." required></textarea>
+                                </div>
+                                <button type="submit" class="primary-btn submit-btn">Submit Feedback</button>
+                            </form>
+                            <p id="feedbackSuccessMsg" class="success-msg hidden mt-4">Thank you for your review!</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add Habit Modal -->
+    <div id="habitModal" class="modal-overlay hidden">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h2>Create New Habit</h2>
+                <button id="closeModalBtn" class="icon-btn"><i data-lucide="x"></i></button>
+            </div>
+            <form id="habitForm">
+                <input type="hidden" id="editingHabitId" value="">
+                <div class="form-group">
+                    <label for="habitName">Habit Name</label>
+                    <input type="text" id="habitName" placeholder="e.g., Read 10 pages, Workout..." required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="habitCategory">Category</label>
+                    <div class="custom-select">
+                        <select id="habitCategory" required>
+                            <option value="" disabled selected>Select category</option>
+                            <option value="Study">📚 Study</option>
+                            <option value="Health">🧘‍♀️ Health</option>
+                            <option value="Fitness">🏋️‍♂️ Fitness</option>
+                            <option value="Skill">🎸 Skill</option>
+                            <option value="Other">✨ Other</option>
+                        </select>
+                        <i data-lucide="chevron-down" class="select-icon"></i>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="habitNote">Note (optional)</label>
+                    <input type="text" id="habitNote" placeholder="e.g., Target: 5 pages" autocomplete="off">
+                </div>
+                <button type="submit" class="primary-btn submit-btn">Save Habit</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
